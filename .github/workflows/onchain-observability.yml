@@ -1,0 +1,56 @@
+name: Handasa Onchain Observability
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest -v
+      - run: python -m pip install bandit==1.7.10 ruff==0.8.4
+      - run: ruff check .
+      - run: bandit -r . -x ./.git
+
+  observe:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check RPC health
+        env:
+          NETWORK_RPC_URL: ${{ secrets.NETWORK_RPC_URL }}
+          NETWORK_RPC_URLS: ${{ secrets.NETWORK_RPC_URLS }}
+        run: python system_guard.py
+      - name: Consolidate public balances
+        env:
+          NETWORK_RPC_URL: ${{ secrets.NETWORK_RPC_URL }}
+          CHAIN_ID: ${{ vars.CHAIN_ID }}
+          WATCHED_ADDRESSES: ${{ vars.WATCHED_ADDRESSES }}
+          NATIVE_SYMBOL: ${{ vars.NATIVE_SYMBOL }}
+          ASSET_PRICES_USD: ${{ vars.ASSET_PRICES_USD }}
+          PRICE_SOURCE: ${{ vars.PRICE_SOURCE }}
+          RESERVES_OUTPUT: reports/reserves-latest.json
+        run: python asset_consolidator.py
+      - name: Build social review draft
+        run: python social_summary.py > reports/social-summary.json
+      - name: Upload observation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: onchain-observation-${{ github.run_number }}
+          path: reports/
+          if-no-files-found: error
+          retention-days: 14
