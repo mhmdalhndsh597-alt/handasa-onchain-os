@@ -2,6 +2,10 @@ name: Handasa Onchain Observability
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   schedule:
     - cron: "*/5 * * * *"
 
@@ -22,6 +26,7 @@ jobs:
       - run: bandit -r . -x ./.git
 
   observe:
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 5

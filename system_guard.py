@@ -31,7 +31,10 @@ def check_rpc(url: str) -> dict:
 
 
 def main() -> int:
-    urls = [value.strip() for value in os.environ.get("NETWORK_RPC_URLS", os.environ.get("NETWORK_RPC_URL", "")).split(",") if value.strip()]
+    urls = [value.strip() for value in os.environ.get("NETWORK_RPC_URLS", "").split(",") if value.strip()]
+    if not urls:
+        fallback = os.environ.get("NETWORK_RPC_URL", "").strip()
+        urls = [fallback] if fallback else []
     if not urls:
         print("No RPC endpoint configured")
         return 1
