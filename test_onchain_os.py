@@ -1,9 +1,10 @@
 import unittest
+import os
 from decimal import Decimal
 from unittest.mock import patch
 
 from asset_consolidator import consolidate
-from system_guard import check_rpc
+from system_guard import check_rpc, main as system_guard_main
 
 
 class OnchainOSTests(unittest.TestCase):
@@ -21,6 +22,18 @@ class OnchainOSTests(unittest.TestCase):
         result = check_rpc("https://rpc.example")
         self.assertEqual(result["status"], "ok")
         rpc_call.assert_called_once_with("https://rpc.example", "eth_blockNumber", [])
+
+    @patch("system_guard.check_rpc", return_value={"endpoint": "rpc.example", "status": "ok"})
+    def test_empty_rpc_urls_falls_back_to_single_url(self, check_rpc_mock):
+        with patch.dict(os.environ, {"NETWORK_RPC_URLS": "", "NETWORK_RPC_URL": "https://rpc.example"}):
+            self.assertEqual(system_guard_main(), 0)
+        check_rpc_mock.assert_called_once_with("https://rpc.example")
+
+    @patch("system_guard.check_rpc", return_value={"endpoint": "rpc.example", "status": "ok"})
+    def test_blank_rpc_urls_falls_back_to_single_url(self, check_rpc_mock):
+        with patch.dict(os.environ, {"NETWORK_RPC_URLS": " , ", "NETWORK_RPC_URL": "https://rpc.example"}):
+            self.assertEqual(system_guard_main(), 0)
+        check_rpc_mock.assert_called_once_with("https://rpc.example")
 
     def test_no_transaction_submission_in_source(self):
         for filename in ("asset_consolidator.py", "system_guard.py"):
