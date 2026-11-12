@@ -11,6 +11,8 @@ import time
 import urllib.request
 from urllib.parse import urlparse
 
+UA = "Mozilla/5.0 (compatible; HandasaReadOnlyMonitor/1.0)"
+
 DEFAULT_RPC_FALLBACKS = (
     "https://ethereum-rpc.publicnode.com",
     "https://rpc.ankr.com/eth",
@@ -49,7 +51,10 @@ def main() -> int:
     results = []
     for url in urls:
         try:
-            results.append(check_rpc(url))
+            result = check_rpc(url)
+            results.append(result)
+            if result["status"] == "ok":
+                break
         except Exception as exc:
             results.append({"endpoint": urlparse(url).netloc, "status": "failed", "error": str(exc)[:300]})
     healthy = any(item["status"] == "ok" for item in results)
