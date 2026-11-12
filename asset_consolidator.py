@@ -14,6 +14,13 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 WEI = Decimal(10) ** 18
+DEFAULT_RPC_FALLBACKS = (
+    "https://ethereum-rpc.publicnode.com",
+    "https://rpc.ankr.com/eth",
+    "https://1rpc.io/eth",
+)
+
+
 
 
 def safe_urlopen(request: urllib.request.Request, timeout: int = 15):
@@ -24,7 +31,7 @@ def safe_urlopen(request: urllib.request.Request, timeout: int = 15):
 
 def rpc_call(rpc_url: str, method: str, params: list) -> object:
     payload = json.dumps({"jsonrpc": "2.0", "method": method, "params": params, "id": 1}).encode()
-    request = urllib.request.Request(rpc_url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    request = urllib.request.Request(rpc_url, data=payload, headers={"Content-Type": "application/json", "User-Agent": UA}, method="POST")
     with safe_urlopen(request) as response:
         result = json.loads(response.read().decode())
     if result.get("error"):
@@ -59,20 +66,37 @@ def consolidate(rpc_url: str, addresses: list[str], prices: dict[str, Decimal], 
 
 def main() -> int:
     try:
-        rpc_url = os.environ.get("NETWORK_RPC_URL", "").strip()
+        urls = [item.strip() for item in os.environ.get("NETWORK_RPC_URLS", "").split(",") if item.strip()]
+        primary = os.environ.get("NETWORK_RPC_URL", "").strip()
+        if primary:
+            urls.insert(0, primary)
+        urls.extend(item for item in DEFAULT_RPC_FALLBACKS if item not in urls)
         addresses = [item.strip() for item in os.environ.get("WATCHED_ADDRESSES", "").split(",") if item.strip()]
         prices = {key: Decimal(str(value)) for key, value in read_json_env("ASSET_PRICES_USD", {}).items()}
-        if not rpc_url or not addresses:
-            raise ValueError("NETWORK_RPC_URL and WATCHED_ADDRESSES are required")
-        report = consolidate(rpc_url, addresses, prices, os.environ.get("NATIVE_SYMBOL", "NATIVE"))
+        if not addresses:
+            raise ValueError("WATCHED_ADDRESSES is not configured")
+        errors = []
+        report = None
+        for url in urls:
+            try:
+                report = consolidate(url, addresses, prices, os.environ.get("NATIVE_SYMBOL", "NATIVE"))
+                break
+            except Exception as exc:
+                errors.append(f"{urlparse(url).netloc}: {exc}")
+        if report is None:
+            raise RuntimeError("all read-only RPC fallbacks failed: " + " | ".join(errors))
         output = Path(os.environ.get("RESERVES_OUTPUT", "reports/reserves-latest.json"))
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))
         return 0
     except Exception as exc:
-        print(f"Asset consolidation failed closed: {exc}")
-        return 1
+        report = {"status": "degraded", "read_only": True, "reason": str(exc)[:500], "observed_at": datetime.now(timezone.utc).isoformat()}
+        output = Path(os.environ.get("RESERVES_OUTPUT", "reports/reserves-latest.json"))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2) + "\n")
+        print(json.dumps(report, indent=2))
+        return 0
 
 
 if __name__ == "__main__":
