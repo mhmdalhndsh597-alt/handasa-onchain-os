@@ -13,6 +13,8 @@ from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlparse
 
+UA = "Mozilla/5.0 (compatible; HandasaReadOnlyMonitor/1.0)"
+
 WEI = Decimal(10) ** 18
 DEFAULT_RPC_FALLBACKS = (
     "https://ethereum-rpc.publicnode.com",
