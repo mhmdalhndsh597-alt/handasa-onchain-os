@@ -43,6 +43,7 @@ jobs:
       - name: Consolidate public balances
         env:
           NETWORK_RPC_URL: ${{ secrets.NETWORK_RPC_URL }}
+          NETWORK_RPC_URLS: ${{ secrets.NETWORK_RPC_URLS }}
           CHAIN_ID: ${{ vars.CHAIN_ID }}
           WATCHED_ADDRESSES: ${{ vars.WATCHED_ADDRESSES }}
           NATIVE_SYMBOL: ${{ vars.NATIVE_SYMBOL }}
